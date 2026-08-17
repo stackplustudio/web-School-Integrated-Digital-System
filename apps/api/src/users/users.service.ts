@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import * as bcrypt from 'bcryptjs';
-import { UserRole } from '@prisma/client'; // PERBAIKAN: Import tipe Enum dari Prisma
+// 🔥 1. Baris import UserRole sudah dihapus dari sini
 
 @Injectable()
 export class UsersService {
@@ -25,8 +25,8 @@ export class UsersService {
         email: createUserDto.email,
         name: createUserDto.name,
         password: hashedPassword,
-        // PERBAIKAN: Gunakan UserRole dari Prisma dan ubah 'USER' menjadi 'SISWA'
-        role: (createUserDto.role as UserRole) || UserRole.SISWA,
+        // 🔥 2. PERBAIKAN: Hapus UserRole, ganti as any, dan gunakan string 'SISWA'
+        role: (createUserDto.role as any) || 'SISWA',
       },
       select: {
         id: true,

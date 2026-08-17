@@ -33,10 +33,10 @@ export class AttendancesService {
     });
 
     const attendanceMap = new Map();
-    existingAttendances.forEach(a => attendanceMap.set(a.studentId, a.status));
+    existingAttendances.forEach((a: any) => attendanceMap.set(a.studentId, a.status));
 
     // Gabungkan data
-    return enrollments.map(e => ({
+    return enrollments.map((e: any) => ({
       studentId: e.studentId,
       nis: e.student.nis,
       nama: e.student.nama,

@@ -54,14 +54,14 @@ export class GradesService {
         subjectId,
         gradeComponentId: componentId,
         academicYearId: activeYear.id,
-        studentId: { in: enrollments.map(e => e.studentId) } // Ini pencarian yang benar!
+        studentId: { in: enrollments.map((e: any) => e.studentId) }
       }
     });
 
     const gradeMap = new Map();
-    gradesByStudent.forEach(g => gradeMap.set(g.studentId, g.nilai));
+    gradesByStudent.forEach((g: any) => gradeMap.set(g.studentId, g.nilai));
 
-    return enrollments.map(e => ({
+    return enrollments.map((e: any) => ({
       studentId: e.studentId,
       nis: e.student.nis,
       nama: e.student.nama,
