@@ -3,11 +3,19 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  
-  // Buka jalur agar Next.js (port 3000) bisa ngobrol ke sini
-  app.enableCors(); 
-  
-  // Jalankan backend di port 3001
-  await app.listen(3001); 
+
+  // 🔥 Tambahkan blok konfigurasi CORS ini
+  app.enableCors({
+    origin: [
+      'http://localhost:3000', 
+      'https://web-school-integrated-digital-syste.vercel.app',
+      'https://sids.stackplustudio.com' // Masukkan custom domain Anda juga
+    ],
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    credentials: true,
+  });
+
+  // Pastikan port menggunakan environment variable dari Railway
+  await app.listen(process.env.PORT || 3001);
 }
 bootstrap();
