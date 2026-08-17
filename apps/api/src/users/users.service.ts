@@ -1,15 +1,15 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto'; // 🔥 TAMBAHKAN BARIS INI
+import { UpdateUserDto } from './dto/update-user.dto';
 import * as bcrypt from 'bcryptjs';
+import { UserRole } from '@prisma/client'; // PERBAIKAN: Import tipe Enum dari Prisma
 
 @Injectable()
 export class UsersService {
   constructor(private prisma: PrismaService) {}
 
   async create(createUserDto: CreateUserDto) {
-    // Cek apakah email sudah dipakai
     const existingUser = await this.prisma.user.findUnique({
       where: { email: createUserDto.email }
     });
@@ -18,7 +18,6 @@ export class UsersService {
       throw new ConflictException('Email sudah terdaftar!');
     }
 
-    // Hash password sebelum disimpan
     const hashedPassword = await bcrypt.hash(createUserDto.password || 'password123', 10);
 
     return this.prisma.user.create({
@@ -26,7 +25,8 @@ export class UsersService {
         email: createUserDto.email,
         name: createUserDto.name,
         password: hashedPassword,
-        role: createUserDto.role || 'USER',
+        // PERBAIKAN: Gunakan UserRole dari Prisma dan ubah 'USER' menjadi 'SISWA'
+        role: (createUserDto.role as UserRole) || UserRole.SISWA,
       },
       select: {
         id: true,
@@ -45,7 +45,6 @@ export class UsersService {
     });
   }
 
-  // Tambahkan fungsi untuk mengambil 1 user spesifik
   async findOne(id: string) {
     const user = await this.prisma.user.findUnique({
       where: { id },
@@ -55,14 +54,12 @@ export class UsersService {
     return user;
   }
 
-  // Tambahkan fungsi untuk update data
   async update(id: string, updateUserDto: UpdateUserDto) {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) throw new NotFoundException('User tidak ditemukan');
 
     const dataToUpdate: any = { ...updateUserDto };
 
-    // Jika password diisi baru, hash ulang. Jika kosong, abaikan.
     if (updateUserDto.password) {
       dataToUpdate.password = await bcrypt.hash(updateUserDto.password, 10);
     } else {

@@ -5,15 +5,521 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
 }
 
+// ==========================================
+// ENUMS
+// ==========================================
+
+enum UserRole {
+  ADMIN_SISTEM
+  KEPALA_SEKOLAH
+  ADMIN_TU
+  GURU
+  WALI_KELAS
+  BENDAHARA
+  SISWA
+  ORANG_TUA
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum StudentStatus {
+  AKTIF
+  LULUS
+  PINDAH
+}
+
+enum VerificationStatus {
+  MENUNGGU
+  DITERIMA
+  DITOLAK
+  REVISI
+}
+
+enum AdmissionStatus {
+  BELUM_DITENTUKAN
+  DITERIMA
+  CADANGAN
+  TIDAK_DITERIMA
+}
+
+enum AttendanceStatus {
+  HADIR
+  SAKIT
+  IZIN
+  ALPA
+  TERLAMBAT
+}
+
+enum LeaveRequestType {
+  SAKIT
+  IZIN
+}
+
+enum LeaveApprovalStatus {
+  MENUNGGU
+  DISETUJUI
+  DITOLAK
+}
+
+enum InvoiceStatus {
+  BELUM_BAYAR
+  SEBAGIAN
+  LUNAS
+  TERLAMBAT
+}
+
+// ==========================================
+// AUTH & USERS (Extended from Template)
+// ==========================================
+
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
+  id        String     @id @default(cuid())
+  email     String     @unique
   password  String   
   name      String?
-  role      String   @default("ADMIN")
+  role      UserRole   @default(ADMIN_SISTEM)
+  status    UserStatus @default(ACTIVE)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  // Relations
+  studentProfile     Student?            @relation("StudentUser")
+  parentProfile      Parent?             @relation("ParentUser")
+  managedClasses     Class[]             @relation("WaliKelas")
+  teacherAssignments TeacherAssignment[] @relation("TeacherAssignmentUser")
+  schedules          Schedule[]          @relation("TeacherScheduleUser")
+  notifications      Notification[]      @relation("UserNotifications")
+  auditLogs          AuditLog[]          @relation("UserAuditLogs")
+}
+
+// ==========================================
+// MASTER DATA & ACADEMIC MANAGEMENT
+// ==========================================
+
+model School {
+  id             String           @id @default(cuid())
+  nama_sekolah   String
+  alamat         String           @db.Text
+  logo           String?
+  jenjang        String
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  
+  gradeComponents GradeComponent[]
+}
+
+model AcademicYear {
+  id           String   @id @default(cuid())
+  tahun_ajaran String   // cth: "2026/2027"
+  semester     String   // cth: "Ganjil" / "Genap"
+  status_aktif Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  ppdbPeriods        PPDBPeriod[]
+  classes            Class[]
+  classEnrollments   ClassEnrollment[]
+  teacherAssignments TeacherAssignment[]
+  grades             Grade[]
+  reportCards        ReportCard[]
+}
+
+model Class {
+  id             String       @id @default(cuid())
+  academicYearId String
+  nama_kelas     String
+  waliKelasId    String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id])
+  waliKelas      User         @relation("WaliKelas", fields: [waliKelasId], references: [id])
+
+  enrollments        ClassEnrollment[]
+  teacherAssignments TeacherAssignment[]
+  schedules          Schedule[]
+  reportCards        ReportCard[]
+  lmsMaterials       LMSMaterial[]
+  lmsAssignments     LMSAssignment[]
+  lmsQuizzes         LMSQuiz[]
+  attendances        Attendance[]
+}
+
+model Subject {
+  id         String   @id @default(cuid())
+  nama_mapel String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  teacherAssignments TeacherAssignment[]
+  schedules          Schedule[]
+  grades             Grade[]
+  lmsMaterials       LMSMaterial[]
+  lmsAssignments     LMSAssignment[]
+  lmsQuizzes         LMSQuiz[]
+  attendances        Attendance[]
+}
+
+model TeacherAssignment {
+  id             String   @id @default(cuid())
+  teacherId      String
+  subjectId      String
+  classId        String
+  academicYearId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  teacher      User         @relation("TeacherAssignmentUser", fields: [teacherId], references: [id])
+  subject      Subject      @relation(fields: [subjectId], references: [id])
+  class        Class        @relation(fields: [classId], references: [id])
+  academicYear AcademicYear @relation(fields: [academicYearId], references: [id])
+}
+
+model Schedule {
+  id          String   @id @default(cuid())
+  classId     String
+  subjectId   String
+  teacherId   String
+  hari        String
+  jam_mulai   String
+  jam_selesai String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  class   Class   @relation(fields: [classId], references: [id])
+  subject Subject @relation(fields: [subjectId], references: [id])
+  teacher User    @relation("TeacherScheduleUser", fields: [teacherId], references: [id])
+}
+
+// ==========================================
+// PPDB (PENERIMAAN PESERTA DIDIK BARU)
+// ==========================================
+
+model PPDBPeriod {
+  id             String   @id @default(cuid())
+  academicYearId String
+  jalur          String[] 
+  kuota          Int
+  tanggal_buka   DateTime
+  tanggal_tutup  DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  academicYear AcademicYear @relation(fields: [academicYearId], references: [id])
+  applicants   Applicant[]
+}
+
+model Applicant {
+  id                String             @id @default(cuid())
+  ppdbPeriodId      String
+  nomor_pendaftaran String             @unique
+  data_diri         Json
+  data_ortu         Json
+  jalur             String
+  status_verifikasi VerificationStatus @default(MENUNGGU)
+  nilai_seleksi     Float?
+  status_kelulusan  AdmissionStatus    @default(BELUM_DITENTUKAN)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  ppdbPeriod PPDBPeriod          @relation(fields: [ppdbPeriodId], references: [id])
+  documents  ApplicantDocument[]
+  student    Student?            @relation("ApplicantToStudent")
+}
+
+model ApplicantDocument {
+  id                String             @id @default(cuid())
+  applicantId       String
+  jenis_dokumen     String
+  file_url          String
+  status_verifikasi VerificationStatus @default(MENUNGGU)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  applicant Applicant @relation(fields: [applicantId], references: [id])
+}
+
+// ==========================================
+// STUDENT & PARENTS DATA
+// ==========================================
+
+model Student {
+  id            String        @id @default(cuid())
+  applicantId   String?       @unique 
+  userId        String?       @unique 
+  nis           String        @unique
+  nama          String
+  tanggal_lahir DateTime
+  status        StudentStatus @default(AKTIF)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  applicant Applicant? @relation("ApplicantToStudent", fields: [applicantId], references: [id])
+  user      User?      @relation("StudentUser", fields: [userId], references: [id])
+
+  parents       StudentParent[]
+  enrollments   ClassEnrollment[]
+  grades        Grade[]
+  reportCards   ReportCard[]
+  submissions   LMSSubmission[]
+  attendances   Attendance[]
+  leaveRequests LeaveRequest[]
+  invoices      Invoice[]
+}
+
+model Parent {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  nama      String
+  kontak    String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  user User @relation("ParentUser", fields: [userId], references: [id])
+
+  students StudentParent[]
+}
+
+model StudentParent {
+  id        String   @id @default(cuid())
+  studentId String
+  parentId  String
+  hubungan  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id])
+  parent  Parent  @relation(fields: [parentId], references: [id])
+}
+
+model ClassEnrollment {
+  id             String   @id @default(cuid())
+  studentId      String
+  classId        String
+  academicYearId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  student      Student      @relation(fields: [studentId], references: [id])
+  class        Class        @relation(fields: [classId], references: [id])
+  academicYear AcademicYear @relation(fields: [academicYearId], references: [id])
+}
+
+// ==========================================
+// GRADES & REPORT CARDS
+// ==========================================
+
+model GradeComponent {
+  id           String   @id @default(cuid())
+  schoolId     String
+  nama         String   // cth: "Tugas", "UH", "UTS"
+  bobot_persen Float
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  school School  @relation(fields: [schoolId], references: [id])
+  grades Grade[]
+}
+
+model Grade {
+  id               String   @id @default(cuid())
+  studentId        String
+  subjectId        String
+  academicYearId   String
+  semester         String
+  gradeComponentId String
+  nilai            Float
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  student        Student        @relation(fields: [studentId], references: [id])
+  subject        Subject        @relation(fields: [subjectId], references: [id])
+  academicYear   AcademicYear   @relation(fields: [academicYearId], references: [id])
+  gradeComponent GradeComponent @relation(fields: [gradeComponentId], references: [id])
+}
+
+model ReportCard {
+  id                 String   @id @default(cuid())
+  studentId          String
+  classId            String
+  academicYearId     String
+  semester           String
+  catatan_wali_kelas String?  @db.Text
+  file_pdf           String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  student      Student      @relation(fields: [studentId], references: [id])
+  class        Class        @relation(fields: [classId], references: [id])
+  academicYear AcademicYear @relation(fields: [academicYearId], references: [id])
+}
+
+// ==========================================
+// LMS (LEARNING MANAGEMENT SYSTEM)
+// ==========================================
+
+model LMSMaterial {
+  id             String   @id @default(cuid())
+  subjectId      String
+  classId        String
+  judul          String
+  file_url       String?
+  tanggal_upload DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  subject Subject @relation(fields: [subjectId], references: [id])
+  class   Class   @relation(fields: [classId], references: [id])
+}
+
+model LMSAssignment {
+  id            String   @id @default(cuid())
+  subjectId     String
+  classId       String
+  judul         String
+  deskripsi     String   @db.Text
+  tenggat_waktu DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  subject Subject @relation(fields: [subjectId], references: [id])
+  class   Class   @relation(fields: [classId], references: [id])
+
+  submissions LMSSubmission[]
+}
+
+model LMSSubmission {
+  id           String   @id @default(cuid())
+  assignmentId String
+  studentId    String
+  file_url     String?
+  jawaban      String?  @db.Text
+  waktu_kumpul DateTime @default(now())
+  nilai        Float?
+  feedback     String?  @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  assignment LMSAssignment @relation(fields: [assignmentId], references: [id])
+  student    Student       @relation(fields: [studentId], references: [id])
+}
+
+model LMSQuiz {
+  id         String   @id @default(cuid())
+  subjectId  String
+  classId    String
+  judul      String
+  pertanyaan Json     
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  subject Subject @relation(fields: [subjectId], references: [id])
+  class   Class   @relation(fields: [classId], references: [id])
+}
+
+// ==========================================
+// ATTENDANCE & LEAVE REQUEST
+// ==========================================
+
+model Attendance {
+  id        String           @id @default(cuid())
+  studentId String
+  classId   String
+  subjectId String?          
+  tanggal   DateTime
+  status    AttendanceStatus
+  catatan   String?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  student Student  @relation(fields: [studentId], references: [id])
+  class   Class    @relation(fields: [classId], references: [id])
+  subject Subject? @relation(fields: [subjectId], references: [id])
+}
+
+model LeaveRequest {
+  id              String              @id @default(cuid())
+  studentId       String
+  tanggal         DateTime
+  jenis           LeaveRequestType
+  lampiran        String?
+  status_approval LeaveApprovalStatus @default(MENUNGGU)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id])
+}
+
+// ==========================================
+// FINANCE / BILLING
+// ==========================================
+
+model BillingType {
+  id              String   @id @default(cuid())
+  nama            String   
+  nominal_default Float
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  invoices Invoice[]
+}
+
+model Invoice {
+  id            String        @id @default(cuid())
+  studentId     String
+  billingTypeId String
+  periode       String        // cth: "Juli 2026"
+  nominal       Float
+  status        InvoiceStatus @default(BELUM_BAYAR)
+  jatuh_tempo   DateTime
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  student     Student     @relation(fields: [studentId], references: [id])
+  billingType BillingType @relation(fields: [billingTypeId], references: [id])
+  payments    Payment[]
+}
+
+model Payment {
+  id        String   @id @default(cuid())
+  invoiceId String
+  jumlah    Float
+  tanggal   DateTime @default(now())
+  metode    String
+  bukti_url String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+}
+
+// ==========================================
+// SYSTEM & LOGGING
+// ==========================================
+
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String
+  tipe        String   // cth: "PENGUMUMAN", "TAGIHAN", "NILAI"
+  konten      String   @db.Text
+  status_baca Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation("UserNotifications", fields: [userId], references: [id])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  aksi      String
+  detail    String   @db.Text
+  timestamp DateTime @default(now())
+
+  user User @relation("UserAuditLogs", fields: [userId], references: [id])
 }

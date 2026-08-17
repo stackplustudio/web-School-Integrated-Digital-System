@@ -34,6 +34,7 @@ Pahami seluruh guideline UI/UX yang tersedia, kemudian sesuaikan dengan breakdow
 
 Identifikasi kebutuhan UI yang diperlukan untuk project, seperti:
 
+* Color palette
 * Page
 * Layout
 * Component

@@ -10,13 +10,14 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  // 1. Validasi kredensial (Email & Password)
+  // 1. Validasi kredensial (Email, Password, & Status Active)
   async validateUser(email: string, pass: string): Promise<any> {
     const user = await this.prisma.user.findUnique({
       where: { email },
     });
 
-    if (user && (await bcrypt.compare(pass, user.password))) {
+    // PERBAIKAN: Pastikan user ada, statusnya ACTIVE, dan password cocok
+    if (user && user.status === 'ACTIVE' && (await bcrypt.compare(pass, user.password))) {
       const { password, ...result } = user;
       return result;
     }
@@ -28,7 +29,8 @@ export class AuthService {
     const payload = { 
       email: user.email, 
       sub: user.id, 
-      role: user.role // PERBAIKAN: role adalah string, bukan object
+      role: user.role,
+      name: user.name // PERBAIKAN: Menyertakan nama untuk frontend
     };
 
     // Access token untuk dikirim ke memory frontend
@@ -44,9 +46,10 @@ export class AuthService {
       user: {
         id: user.id,
         email: user.email,
-        role: user.role, // PERBAIKAN: disesuaikan menjadi string
+        role: user.role,
+        name: user.name, // PERBAIKAN: Dikembalikan ke frontend
       },
-      access_token: accessToken, // PERBAIKAN: disamakan dengan tarikan Next.js
+      access_token: accessToken,
       refreshToken,
     };
   }
