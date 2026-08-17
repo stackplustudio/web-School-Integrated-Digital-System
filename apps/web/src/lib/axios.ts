@@ -27,9 +27,12 @@ api.interceptors.response.use(
   (error) => {
     if (error.response && error.response.status === 401) {
       if (typeof window !== "undefined") {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-        window.location.href = "/auth/login";
+        // 🔥 TAMBAHAN KUNCI: Jangan redirect jika user sedang berada di halaman login
+        if (!window.location.pathname.includes("/auth/login")) {
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+          window.location.href = "/auth/login";
+        }
       }
     }
     return Promise.reject(error);
