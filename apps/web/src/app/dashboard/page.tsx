@@ -16,7 +16,7 @@ export default function DashboardPage() {
   useEffect(() => {
     const token = Cookies.get("token");
     if (!token) {
-      router.push("/");
+      router.replace("/dashboard/main");
       return;
     }
     
